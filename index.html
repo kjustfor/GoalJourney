@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GoalJourney">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>GoalJourney</title>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#111827;--green:#16a34a}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Arial,sans-serif}
+    button,input,textarea{font:inherit} button{cursor:pointer}
+    .app{max-width:760px;margin:0 auto;min-height:100vh;padding-bottom:92px}
+    header{padding:calc(18px + env(safe-area-inset-top)) 18px 14px;background:var(--bg);position:sticky;top:0;z-index:5}
+    header h1{margin:0;font-size:28px} header p{margin:4px 0 0;color:var(--muted)}
+    main{padding:10px 16px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 4px 18px rgba(17,24,39,.04)}
+    .hero{text-align:center}.amount{font-size:40px;font-weight:800;letter-spacing:-1px;margin:8px 0}
+    .progress{height:13px;background:#e5e7eb;border-radius:99px;overflow:hidden;margin:15px 0 8px}.progress>div{height:100%;background:var(--accent);border-radius:99px}
+    .row{display:flex;justify-content:space-between;gap:12px}.muted{color:var(--muted)} .small{font-size:13px}
+    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.stat{padding:16px;background:var(--card);border:1px solid var(--line);border-radius:18px}
+    .stat strong{display:block;font-size:20px;margin-top:5px}.section-title{font-size:18px;font-weight:750;margin:20px 2px 10px}
+    .btn{border:0;border-radius:14px;padding:14px 16px;font-weight:700;background:var(--accent);color:white;width:100%}.btn.secondary{background:#eef0f4;color:var(--text)}
+    .btn.smallbtn{width:auto;padding:10px 13px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .why{font-style:italic;color:#4b5563}.entry{padding:14px 0;border-top:1px solid var(--line)}.entry:first-child{border-top:0}
+    nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);backdrop-filter:blur(18px);border-top:1px solid var(--line);padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:flex;justify-content:center;z-index:10}
+    nav .navin{max-width:760px;width:100%;display:grid;grid-template-columns:repeat(3,1fr);gap:6px} nav button{border:0;background:transparent;padding:9px 4px;color:#6b7280;border-radius:12px} nav button.active{background:#eef0f4;color:var(--text);font-weight:700}
+    .screen{display:none}.screen.active{display:block}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;z-index:20}.modal.show{display:flex}.sheet{background:var(--card);width:100%;max-width:760px;margin:0 auto;border-radius:24px 24px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto}
+    label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}input,textarea{width:100%;border:1px solid var(--line);border-radius:13px;padding:13px;background:#fafafa;outline:none}textarea{min-height:120px;resize:vertical}
+    .moods{display:flex;gap:8px}.moods button{flex:1;border:1px solid var(--line);background:#fafafa;border-radius:12px;padding:10px;font-size:21px}.moods button.selected{background:#eef0f4;border-color:#111827}
+    .milestone{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}.milestone:first-child{border-top:0}.dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb}.done .dot{background:#dcfce7;color:#15803d}.done .mtitle{font-weight:750}
+    .empty{text-align:center;padding:24px;color:var(--muted)}
+    .setup{min-height:100vh;display:flex;align-items:center;padding:28px 18px}.setup .card{width:100%}
+    .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#111827;color:white;padding:10px 14px;border-radius:99px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:30}.toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<div id="modal" class="modal">
+  <div class="sheet">
+    <div class="row"><h2 id="modalTitle" style="margin:0">Add</h2><button class="btn smallbtn secondary" onclick="closeModal()">Close</button></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+const KEY="goaljourney-v1";
+let data=JSON.parse(localStorage.getItem(KEY)||"null");
+let screen="goal";
+
+const money=n=>"R"+Number(n||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+const dateFmt=d=>new Date(d).toLocaleDateString("en-ZA",{day:"numeric",month:"short",year:"numeric"});
+const today=()=>new Date().toISOString().slice(0,10);
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function totalSaved(){return (data.startingAmount||0)+(data.contributions||[]).reduce((a,x)=>a+Number(x.amount||0),0)}
+function progress(){return data.target?Math.min(100,totalSaved()/data.target*100):0}
+function daysLeft(){return Math.max(0,Math.ceil((new Date(data.deadline+"T23:59:59")-new Date())/86400000))}
+function weeklyPace(){return data.target>totalSaved()?((data.target-totalSaved())/Math.max(daysLeft()/7,1)):0}
+function streak(){
+  const ds=new Set((data.contributions||[]).map(x=>x.date));
+  let d=new Date(); let s=0;
+  let key=d.toISOString().slice(0,10);
+  if(!ds.has(key)){d.setDate(d.getDate()-1);key=d.toISOString().slice(0,10)}
+  while(ds.has(key)){s++;d.setDate(d.getDate()-1);key=d.toISOString().slice(0,10)}
+  return s;
+}
+function nextMilestone(){
+  for(const m of [10,25,50,75,100]) if(progress()<m) return m;
+  return 100;
+}
+function render(){
+  if(!data){renderSetup();return}
+  document.getElementById("app").innerHTML=`
+  <div class="app">
+    <header><h1>${esc(data.name)}</h1><p>${screen==="goal"?"Keep moving.":screen==="journal"?"Write it down.":"See how far you've come."}</p></header>
+    <main>
+      <section id="goal" class="screen ${screen==="goal"?"active":""}">${goalHTML()}</section>
+      <section id="journal" class="screen ${screen==="journal"?"active":""}">${journalHTML()}</section>
+      <section id="journey" class="screen ${screen==="journey"?"active":""}">${journeyHTML()}</section>
+    </main>
+    <nav><div class="navin">
+      <button class="${screen==="goal"?"active":""}" onclick="go('goal')">🎯<br><span class="small">Goal</span></button>
+      <button class="${screen==="journal"?"active":""}" onclick="go('journal')">📖<br><span class="small">Journal</span></button>
+      <button class="${screen==="journey"?"active":""}" onclick="go('journey')">📈<br><span class="small">Journey</span></button>
+    </div></nav>
+  </div>`;
+}
+function goalHTML(){
+ const p=progress(), saved=totalSaved(), rem=Math.max(0,data.target-saved);
+ return `
+ <div class="card hero"><div class="muted">Saved so far</div><div class="amount">${money(saved)}</div>
+ <div class="progress"><div style="width:${p}%"></div></div>
+ <div class="row small"><span>${p.toFixed(1)}%</span><span>${money(rem)} left</span></div></div>
+ <div class="stats">
+  <div class="stat">🔥 <span class="muted small">Streak</span><strong>${streak()} days</strong></div>
+  <div class="stat">🏁 <span class="muted small">Next milestone</span><strong>${nextMilestone()}%</strong></div>
+  <div class="stat">📅 <span class="muted small">Days left</span><strong>${daysLeft()}</strong></div>
+  <div class="stat">💰 <span class="muted small">Weekly pace</span><strong>${money(weeklyPace())}</strong></div>
+ </div>
+ <div class="section-title">Your reason</div>
+ <div class="card why">${data.why?`“${esc(data.why)}”`:"Add your reason in Goal Settings."}</div>
+ <div class="actions"><button class="btn" onclick="openContribution()">＋ Add Money</button><button class="btn secondary" onclick="openSettings()">⚙ Settings</button></div>`;
+}
+function journalHTML(){
+ const entries=(data.journal||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ return `<div class="actions"><button class="btn" onclick="openJournal()">＋ New Entry</button><button class="btn secondary" onclick="openSettings()">⚙ Goal</button></div>
+ <div class="section-title">Recent entries</div><div class="card">${entries.length?entries.map(e=>`<div class="entry"><div class="row"><strong>${e.mood} ${dateFmt(e.date)}</strong></div><div style="margin-top:7px">${esc(e.text)}</div></div>`).join(""):`<div class="empty">No journal entries yet.<br>Write your first one.</div>`}</div>`;
+}
+function journeyHTML(){
+ const saved=totalSaved();
+ return `<div class="card"><div class="row"><span>Saved</span><strong>${money(saved)}</strong></div><div class="row" style="margin-top:10px"><span>Target</span><strong>${money(data.target)}</strong></div><div class="row" style="margin-top:10px"><span>Contributions</span><strong>${data.contributions.length}</strong></div></div>
+ <div class="section-title">Milestones</div><div class="card">${[10,25,50,75,100].map(m=>{let amount=data.target*m/100,done=saved>=amount;return `<div class="milestone ${done?"done":""}"><div class="dot">${done?"✓":m+"%"}</div><div><div class="mtitle">${m}% milestone</div><div class="small muted">${money(amount)} ${done?"• Reached":""}</div></div></div>`}).join("")}</div>
+ <div class="section-title">Contribution history</div><div class="card">${data.contributions.length?data.contributions.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(c=>`<div class="entry"><div class="row"><span>${dateFmt(c.date)}</span><strong>${money(c.amount)}</strong></div>${c.note?`<div class="small muted">${esc(c.note)}</div>`:""}</div>`).join(""):`<div class="empty">No contributions yet.</div>`}</div>`;
+}
+function renderSetup(){
+ document.getElementById("app").innerHTML=`<div class="setup"><div class="card"><h1 style="font-size:34px">🎯 GoalJourney</h1><p class="muted">A simple private tracker for the goal you're working toward.</p>
+ <label>Goal name</label><input id="sName" value="My Goal">
+ <label>Target amount</label><input id="sTarget" type="number" inputmode="decimal" placeholder="50000">
+ <label>Already saved</label><input id="sStart" type="number" inputmode="decimal" value="0">
+ <label>Deadline</label><input id="sDeadline" type="date" value="${new Date(Date.now()+180*86400000).toISOString().slice(0,10)}">
+ <label>Why does this matter?</label><textarea id="sWhy" placeholder="What will reaching this goal change for you?"></textarea>
+ <button class="btn" style="margin-top:16px" onclick="createGoal()">Start My Journey</button>
+ <p class="small muted">Your data is saved locally in this browser. No account or internet connection is needed for normal use.</p>
+ </div></div>`;
+}
+function createGoal(){
+ const target=Number(document.getElementById("sTarget").value), start=Number(document.getElementById("sStart").value||0);
+ if(!(target>0)) return alert("Enter a target amount.");
+ data={name:document.getElementById("sName").value.trim()||"My Goal",target,startingAmount:Math.max(0,start),deadline:document.getElementById("sDeadline").value,why:document.getElementById("sWhy").value.trim(),contributions:[],journal:[]};
+ if(start>0)data.contributions.push({amount:start,date:today(),note:"Starting amount"});
+ save();render();
+}
+function go(s){screen=s;render()}
+function openModal(title,body){document.getElementById("modalTitle").textContent=title;document.getElementById("modalBody").innerHTML=body;document.getElementById("modal").classList.add("show")}
+function closeModal(){document.getElementById("modal").classList.remove("show")}
+function openContribution(){openModal("Add Money",`<label>Amount</label><input id="cAmount" type="number" inputmode="decimal" placeholder="1000"><label>Date</label><input id="cDate" type="date" value="${today()}"><label>Note</label><input id="cNote" placeholder="e.g. Commission"><button class="btn" style="margin-top:16px" onclick="addContribution()">Save Contribution</button>`)}
+function addContribution(){const amount=Number(document.getElementById("cAmount").value);if(!(amount>0))return alert("Enter an amount.");data.contributions.push({amount,date:document.getElementById("cDate").value,note:document.getElementById("cNote").value.trim()});save();closeModal();toast("Contribution saved");render()}
+function openJournal(){openModal("New Journal Entry",`<label>Mood</label><div class="moods">${["😞","😐","🙂","😄","🔥"].map((m,i)=>`<button class="${i===2?"selected":""}" onclick="pickMood(this,'${m}')">${m}</button>`).join("")}</div><input type="hidden" id="jMood" value="🙂"><label>Entry</label><textarea id="jText" placeholder="What happened today? What did you learn? What are you proud of?"></textarea><button class="btn" style="margin-top:16px" onclick="addJournal()">Save Entry</button>`)}
+function pickMood(el,m){document.querySelectorAll(".moods button").forEach(x=>x.classList.remove("selected"));el.classList.add("selected");document.getElementById("jMood").value=m}
+function addJournal(){const text=document.getElementById("jText").value.trim();if(!text)return alert("Write something first.");data.journal.push({date:today(),mood:document.getElementById("jMood").value,text});save();closeModal();toast("Journal entry saved");render()}
+function openSettings(){openModal("Goal Settings",`<label>Goal name</label><input id="gName" value="${esc(data.name)}"><label>Target amount</label><input id="gTarget" type="number" inputmode="decimal" value="${data.target}"><label>Deadline</label><input id="gDeadline" type="date" value="${data.deadline}"><label>Why</label><textarea id="gWhy">${esc(data.why)}</textarea><button class="btn" style="margin-top:16px" onclick="saveSettings()">Save Changes</button><button class="btn secondary" style="margin-top:10px" onclick="confirmReset()">Reset App</button>`)}
+function saveSettings(){data.name=document.getElementById("gName").value.trim()||"My Goal";data.target=Number(document.getElementById("gTarget").value)||data.target;data.deadline=document.getElementById("gDeadline").value;data.why=document.getElementById("gWhy").value.trim();save();closeModal();toast("Goal updated");render()}
+function confirmReset(){if(confirm("This will permanently erase your goal, contributions and journal entries from this browser. Continue?")){localStorage.removeItem(KEY);location.reload()}}
+function toast(t){const el=document.getElementById("toast");el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1600)}
+render();
+</script>
+</body>
+</html>
